@@ -57,6 +57,23 @@ body{
   box-shadow:0 1px 3px rgba(0,0,0,.05);
 }
 .dev-name{font-size:17px; font-weight:600; margin-bottom:3px}
+
+/* ---------- 设备卡片顶行（名字 + 在线状态）---------- */
+.dev-head{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.dev-statebox{
+  display:flex; align-items:center; gap:5px;
+  font-size:12.5px; color:var(--gray); flex:none;
+}
+.dev-dot{
+  display:inline-block; width:8px; height:8px; border-radius:50%;
+  background:#C7C7CC; transition:background .3s, box-shadow .3s;
+}
+.dev-dot.on{
+  background:var(--green);
+  box-shadow:0 0 0 3px rgba(52,199,89,.18);
+}
+.dev-statebox:has(.dev-dot.on) .dev-state{color:var(--green); font-weight:600}
+
 .dev-meta{font-size:11.5px; color:var(--gray); margin-bottom:14px; word-break:break-all}
 .row{display:flex; gap:10px}
 
@@ -405,10 +422,78 @@ function connect(){
     const m = payload.toString();
     if(m === 'ping' || m.startsWith('ok:') || m.startsWith('err:') || m.startsWith('wol:'))
       log('📨 ' + m);
-    else if(m.startsWith('alive:'))
-      log('🟢 在线 · ' + m.slice(6));
+    else if(m.startsWith('alive:')){
+      const who = m.slice(6).trim();
+      log('🟢 在线 · ' + who);
+      // ★ 记下这台设备"刚刚应答过"
+      if(who){
+        aliveSeen[who] = Date.now();
+        refreshDevStatus();
+      }
+    }
     else
       log('📨 ' + m);
+  });
+
+  // ★ 定期问一句"谁在"，看谁答（用来判断电脑开机还是关机）
+  clearInterval(pingTimer);
+  pingTimer = setInterval(askWhoIsAlive, PING_EVERY);
+  setTimeout(askWhoIsAlive, 1500);
+}
+
+/* ==================== 在线状态（开机 / 关机）====================
+   原理：网页每隔一会儿喊一声 ping，
+        开机的电脑（值班员）和板子会回一句 alive:名字。
+        谁答了 = 谁开着；超过 45 秒没答 = 关着。
+================================================================ */
+const PING_EVERY = 20000;   // 每 20 秒问一次
+const ALIVE_TTL  = 45000;   // 45 秒没应答就算离线
+let aliveSeen = {};         // { "P310": 1530000000000 }
+let pingTimer = null;
+// 方便调试（也方便你在浏览器控制台看状态）
+window.aliveSeen = aliveSeen;
+window.__wolDebug = ()=>({ aliveSeen, devices: devs.map(d=>({name:d.name, online:isOnline(d)})) });
+
+function askWhoIsAlive(){
+  if(!cli || !cli.connected) return;
+  cli.publish(TOPIC, 'ping', {qos:0});
+  log('📡 查询设备状态…');
+}
+
+/** 判断某台设备现在是不是开机状态 */
+function isOnline(d){
+  const now = Date.now();
+  const targets = [];
+  if(d.cloud) targets.push(String(d.cloud).trim());
+  if(d.name)  targets.push(String(d.name).trim());
+  // 去掉中文括号后缀，比如 "P310（本机）" → "P310"
+  if(d.name)  targets.push(String(d.name).replace(/[（(].*?[)）]/g,'').trim());
+
+  for(const who in aliveSeen){
+    if(now - aliveSeen[who] > ALIVE_TTL) continue;      // 超时的不算
+    const w = who.trim();
+    for(const t of targets){
+      if(!t) continue;
+      if(w === t) return true;                           // 完全一样
+      if(w.toLowerCase() === t.toLowerCase()) return true; // 忽略大小写
+      // 互相包含（"P310" 与 "P310（本机）" 这类）
+      if(w.length >= 3 && t.length >= 3 && (w.includes(t) || t.includes(w))) return true;
+    }
+  }
+  return false;
+}
+
+/** 刷新每张卡的状态点（不重建 DOM，避免闪烁） */
+function refreshDevStatus(){
+  const cards = document.querySelectorAll('#devs .dev');
+  cards.forEach((el, i)=>{
+    const d = devs[i];
+    if(!d) return;
+    const dot = el.querySelector('.dev-dot');
+    const txt = el.querySelector('.dev-state');
+    const on  = isOnline(d);
+    if(dot) dot.className = 'dev-dot ' + (on ? 'on' : '');
+    if(txt) txt.textContent = on ? '开机中' : '已关机';
   });
 }
 
@@ -434,7 +519,12 @@ function render(){
     const el = document.createElement('div');
     el.className = 'dev';
     el.innerHTML =
-      `<div class="dev-name">${esc(d.name)}</div>
+      `<div class="dev-head">
+         <div class="dev-name">${esc(d.name)}</div>
+         <div class="dev-statebox">
+           <span class="dev-dot"></span><span class="dev-state">检测中…</span>
+         </div>
+       </div>
        <div class="dev-meta">${esc(d.ip||'')}${d.ip&&d.mac?'  ·  ':''}${esc(d.mac||'')}</div>
        <div class="row">
          <button class="btn btn-on">开 机</button>
@@ -445,7 +535,12 @@ function render(){
     off.onclick = ()=>shutdown(d);
     box.appendChild(el);
   });
+
+  refreshDevStatus();
 }
+
+/* 每 3 秒刷新一次状态显示（兼顾超时判定） */
+setInterval(refreshDevStatus, 3000);
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
