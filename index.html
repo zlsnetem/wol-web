@@ -86,6 +86,9 @@ body{
   display:block; max-width:100%; height:auto;
   image-rendering:pixelated;         /* 二维码边缘更锐利 */
 }
+/* qrcodejs 会同时生成 canvas 和一张兜底 img，
+   浏览器里 img 会露出来一个乱字符 → 只保留 canvas */
+.qrbox img{display:none !important}
 
 .btn{
   flex:1; height:52px; border:0; border-radius:12px;
