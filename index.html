@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0A84FF">
+<!-- 内嵌图标：避免浏览器找不到 favicon 时报 404 -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230A84FF'/><path d='M50 16v40' stroke='%23fff' stroke-width='11' stroke-linecap='round'/><path d='M30 34a30 30 0 0 0 40 0' stroke='%23fff' stroke-width='11' stroke-linecap='round' fill='none'/></svg>">
+<title>远程开关机</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --blue:#0A84FF; --red:#FF3B30; --green:#34C759;
+  --bg:#F2F2F7; --card:#FFF; --text:#1C1C1E; --gray:#8E8E93;
+  --radius:14px;
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--text);
+  padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+
+/* ---------- 顶栏 ---------- */
+.top{
+  background:var(--card); padding:14px 18px;
+  display:flex; align-items:center; justify-content:space-between;
+  position:sticky; top:0; z-index:10;
+  box-shadow:0 1px 0 rgba(0,0,0,.06);
+}
+.top h1{font-size:18px; font-weight:600}
+.dot{
+  display:inline-block; width:9px; height:9px; border-radius:50%;
+  margin-right:6px; vertical-align:middle; background:var(--gray);
+  transition:background .3s;
+}
+.dot.on{background:var(--green); box-shadow:0 0 0 3px rgba(52,199,89,.2)}
+.dot.err{background:var(--red)}
+.dot.ing{background:#FF9F0A; animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.status{font-size:13px; color:var(--gray); display:flex; align-items:center}
+
+/* ---------- 内容 ---------- */
+.wrap{padding:16px}
+.tip{
+  background:#EAF3FF; color:#0A5BD3; font-size:12.5px;
+  padding:10px 14px; border-radius:10px; margin-bottom:14px; line-height:1.6;
+}
+
+/* ---------- 设备卡 ---------- */
+.dev{
+  background:var(--card); border-radius:var(--radius);
+  padding:16px; margin-bottom:12px;
+  box-shadow:0 1px 3px rgba(0,0,0,.05);
+}
+.dev-name{font-size:17px; font-weight:600; margin-bottom:3px}
+.dev-meta{font-size:11.5px; color:var(--gray); margin-bottom:14px; word-break:break-all}
+.row{display:flex; gap:10px}
+
+/* ---------- 分组区块 ---------- */
+.sec{margin-top:4px}
+.sechead{
+  font-size:12px; color:var(--gray); font-weight:600;
+  padding:0 4px 6px; letter-spacing:.3px;
+}
+.sec button{
+  width:100%; display:flex; align-items:center; justify-content:space-between;
+  background:var(--card); border:none; border-radius:12px;
+  padding:15px 16px; margin-bottom:8px; font-size:15.5px;
+  color:var(--text); font-family:inherit; cursor:pointer;
+  box-shadow:0 1px 3px rgba(0,0,0,.05);
+}
+.sec button:active{background:#F0F0F3}
+.sec .arrow{color:#C7C7CC; font-size:19px; line-height:1}
+
+/* ---------- 二维码框 ---------- */
+.qrbox{
+  background:#FFF; border:1px solid #E5E5EA; border-radius:14px;
+  padding:16px; margin-top:12px; display:flex;
+  align-items:center; justify-content:center; min-height:180px;
+}
+.qrbox img, .qrbox canvas{
+  display:block; max-width:100%; height:auto;
+  image-rendering:pixelated;         /* 二维码边缘更锐利 */
+}
+
+.btn{
+  flex:1; height:52px; border:0; border-radius:12px;
+  font-size:16px; font-weight:600; color:#fff;
+  cursor:pointer; transition:transform .08s, opacity .2s;
+  font-family:inherit;
+}
+.btn:active{transform:scale(.96)}
+.btn:disabled{opacity:.4}
+.btn-on{background:var(--blue)}
+.btn-off{background:var(--red)}
+
+/* ---------- 取消关机（显眼） ---------- */
+.panic{
+  width:100%; height:52px; margin-bottom:12px;
+  background:#FFF1F0; color:var(--red); border:1.5px solid #FFD9D6;
+  border-radius:var(--radius); font-size:15px; font-weight:600;
+  cursor:pointer; font-family:inherit;
+}
+.panic:active{transform:scale(.98)}
+
+/* ---------- 其他按钮 ---------- */
+.sec{
+  background:var(--card); border-radius:var(--radius);
+  overflow:hidden; margin-top:8px;
+}
+.sec button{
+  width:100%; height:52px; border:0; background:none;
+  font-size:15.5px; color:var(--text); text-align:left;
+  padding:0 18px; cursor:pointer; font-family:inherit;
+  border-bottom:1px solid #F0F0F3;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.sec button:last-child{border-bottom:0}
+.sec button:active{background:#F7F7FA}
+.sec .arrow{color:#C7C7CC; font-size:15px}
+
+/* ---------- 日志 ---------- */
+.log{
+  background:#1C1C1E; color:#A9E34B; border-radius:12px;
+  padding:12px 14px; margin-top:14px;
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px;
+  line-height:1.65; max-height:170px; overflow-y:auto;
+  white-space:pre-wrap; word-break:break-all;
+}
+.log:empty{display:none}
+
+/* ---------- 弹层 ---------- */
+.mask{
+  position:fixed; inset:0; background:rgba(0,0,0,.45);
+  display:none; z-index:100; align-items:flex-end;
+}
+.mask.show{display:flex}
+.sheet{
+  background:var(--card); width:100%; border-radius:18px 18px 0 0;
+  padding:22px 18px calc(22px + env(safe-area-inset-bottom));
+  max-height:88vh; overflow-y:auto;
+  animation:up .25s ease-out;
+}
+@keyframes up{from{transform:translateY(100%)}}
+.sheet h2{font-size:17px; margin-bottom:6px}
+.sheet .desc{font-size:12.5px; color:var(--gray); margin-bottom:18px; line-height:1.6}
+label{display:block; font-size:13px; font-weight:600; margin:14px 0 6px}
+label .opt{font-weight:400; color:var(--gray); font-size:11.5px}
+input{
+  width:100%; height:46px; padding:0 13px; font-size:16px;
+  border:1px solid #D8D8DC; border-radius:10px;
+  background:#FAFAFC; font-family:inherit;
+  -webkit-appearance:none; color:var(--text);
+}
+input:focus{outline:none; border-color:var(--blue); background:#fff}
+.sheet .row{margin-top:22px}
+.ghost{background:#EFEFF4; color:var(--text)}
+
+.hint{
+  font-size:11.5px; color:var(--gray); margin-top:6px; line-height:1.55;
+}
+h3{font-size:14px; margin:24px 0 4px; color:var(--text)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>🔌 远程开关机</h1>
+  <div class="status"><span class="dot" id="dot"></span><span id="stat">未连接</span></div>
+</div>
+
+<div class="wrap">
+
+  <div class="tip" id="firstTip" style="display:none">
+    👋 第一次使用：点下面【⚙ 设置】→ 填巴法云私钥 → 保存，就能用了。
+  </div>
+
+  <div id="devs"></div>
+
+  <button class="panic" id="btnCancel">⛔ 取消关机（60 秒内有效）</button>
+
+  <div class="sec">
+    <button id="btnSet"><span>⚙ 设置（私钥 / 设备）</span><span class="arrow">›</span></button>
+    <button id="btnPing"><span>📡 测试连通（ping）</span><span class="arrow">›</span></button>
+    <button id="btnReconn"><span>🔄 重新连接</span><span class="arrow">›</span></button>
+  </div>
+
+  <div class="log" id="log"></div>
+
+</div>
+
+<!-- ========== 设置弹层 ========== -->
+<div class="mask" id="mask">
+  <div class="sheet">
+
+    <div id="paneMain">
+      <h2>⚙ 设置</h2>
+      <p class="desc">私钥只存在这台手机上，不会上传到任何地方。</p>
+
+      <label>巴法云私钥 <span class="opt">（必填）</span></label>
+      <input id="inKey" type="password" placeholder="粘贴你的私钥" autocomplete="off">
+      <div class="hint">在 cloud.bemfa.com 登录后，MQTT 设备云页面可以看到</div>
+
+      <label>设备名字 <span class="opt">（你手机叫啥，可随便起）</span></label>
+      <input id="inName" placeholder="我的手机">
+
+      <div class="row">
+        <button class="btn ghost" id="btnClose">取消</button>
+        <button class="btn btn-on" id="btnSave">保存并连接</button>
+      </div>
+
+      <div class="sec" style="margin-top:20px">
+        <div class="sechead">备份与恢复</div>
+        <button id="btnExport"><span>📤 导出配置（二维码）</span><span class="arrow">›</span></button>
+        <button id="btnImport"><span>📥 导入配置（换手机用）</span><span class="arrow">›</span></button>
+      </div>
+      <div class="hint" style="margin-top:8px">
+        换手机、或浏览器数据被清掉时，用这个把设备列表搬回来。
+      </div>
+    </div>
+
+    <div id="paneDev" style="display:none">
+      <h2>🖥 设备列表</h2>
+      <p class="desc">点一下设备就能改，右边可以删。</p>
+      <div id="devList"></div>
+      <div class="row" style="margin-top:16px">
+        <button class="btn ghost" id="btnDevBack">返回</button>
+        <button class="btn btn-on" id="btnDevAdd">＋ 添加设备</button>
+      </div>
+      <div class="row">
+        <button class="btn ghost" id="btnDevReset">恢复默认三台</button>
+      </div>
+    </div>
+
+    <div id="paneEdit" style="display:none">
+      <h2 id="edTitle">添加设备</h2>
+      <label>名称</label>
+      <input id="edName" placeholder="比如：书房电脑">
+      <label>IP <span class="opt">（可留空）</span></label>
+      <input id="edIp" placeholder="192.168.0.104" inputmode="decimal">
+      <label>MAC <span class="opt">（必填，开机要用它）</span></label>
+      <input id="edMac" placeholder="74:39:89:98:F6:F6" autocapitalize="characters">
+      <div class="hint">MAC 查法：那台电脑上按 Win+R → cmd → 输入 ipconfig /all → 找"物理地址"</div>
+      <div class="row">
+        <button class="btn ghost" id="edCancel">取消</button>
+        <button class="btn btn-on" id="edSave">保存</button>
+      </div>
+    </div>
+
+    <!-- ========== 导出配置 ========== -->
+    <div id="paneExport" style="display:none">
+      <h2>📤 导出配置</h2>
+      <p class="desc">
+        下面这个二维码，<b>截图存到手机备忘录</b>里就行。<br>
+        换手机、或浏览器数据被清掉时，扫这张图就能恢复。
+      </p>
+
+      <div class="qrbox"><div id="qrHolder"></div></div>
+
+      <label style="margin-top:14px">或者：配置码（复制这串文字也行）</label>
+      <textarea id="taCode" readonly rows="4"
+        style="width:100%;font-size:11px;font-family:ui-monospace,Menlo,monospace;
+               border:1px solid #E5E5EA;border-radius:10px;padding:10px;
+               background:#F7F7F9;color:#3A3A3C;resize:none;box-sizing:border-box"></textarea>
+
+      <div class="row">
+        <button class="btn ghost" id="btnCopyCode">复制配置码</button>
+        <button class="btn btn-on" id="expDone">好了</button>
+      </div>
+
+      <div class="hint" style="margin-top:8px">
+        ⚠️ 这个二维码 / 配置码里<b>包含你的私钥</b>，别发群里、别公开发布。
+        存在自己备忘录里就好。
+      </div>
+    </div>
+
+    <!-- ========== 导入配置 ========== -->
+    <div id="paneImport" style="display:none">
+      <h2>📥 导入配置</h2>
+      <p class="desc">三种方式，任选一种：</p>
+
+      <div class="sechead" style="margin-top:6px">方式一：上传二维码截图</div>
+      <input type="file" id="fileQr" accept="image/*"
+        style="width:100%;font-size:13px;margin-top:4px">
+
+      <div class="sechead" style="margin-top:16px">方式二：粘贴配置码</div>
+      <textarea id="taPaste" rows="4" placeholder="把导出的那串配置码粘到这里"
+        style="width:100%;font-size:11px;font-family:ui-monospace,Menlo,monospace;
+               border:1px solid #E5E5EA;border-radius:10px;padding:10px;
+               box-sizing:border-box;resize:none"></textarea>
+
+      <div class="row">
+        <button class="btn ghost" id="impCancel">取消</button>
+        <button class="btn btn-on" id="btnDoImport">导入并恢复</button>
+      </div>
+
+      <div class="hint" id="impMsg" style="margin-top:8px"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 本地库，不依赖外网 CDN（手机加载不到 CDN 会报 mqtt is not defined） -->
+<script src="mqtt.min.js"></script>
+<script src="qrcode.min.js"></script>
+<script src="jsqr.min.js"></script>
+<script>
+'use strict';
+
+/* ==================== 配置 ==================== */
+const BROKER = 'wss://mqtt.bemfa.com:9504/wss';
+const TOPIC  = 'wolpc';
+const LS_KEY = 'wol_web_cfg';
+const LS_DEV = 'wol_web_devs';
+
+const DEFAULT_DEVS = [
+  {name:'P310（本机）',    ip:'192.168.0.104', mac:'74:39:89:98:F6:F6'},
+  {name:'新机2060',        ip:'192.168.0.103', mac:'00:E0:06:4D:49:B2'},
+  {name:'NAS（绿联）',     ip:'192.168.0.4',   mac:'6C:1F:F7:0C:8B:80'},
+];
+
+let cfg = {key:'', name:'我的手机'};
+let devs = [];
+let cli = null;
+let editIdx = -1;
+
+/* ==================== 存取 ==================== */
+function load(){
+  try{ cfg = JSON.parse(localStorage.getItem(LS_KEY)) || cfg; }catch(e){}
+  if(!cfg.name) cfg.name = '我的手机';
+  try{
+    const d = JSON.parse(localStorage.getItem(LS_DEV));
+    devs = Array.isArray(d) && d.length ? d : JSON.parse(JSON.stringify(DEFAULT_DEVS));
+  }catch(e){ devs = JSON.parse(JSON.stringify(DEFAULT_DEVS)); }
+}
+function save(){
+  localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+  localStorage.setItem(LS_DEV, JSON.stringify(devs));
+}
+
+/* ==================== 日志 ==================== */
+function log(msg){
+  const el = document.getElementById('log');
+  const t = new Date().toTimeString().slice(0,8);
+  el.textContent += `[${t}] ${msg}\n`;
+  el.scrollTop = el.scrollHeight;
+  if(el.textContent.length > 3000) el.textContent = el.textContent.slice(-2200);
+}
+
+/* ==================== 状态 ==================== */
+function setStat(txt, cls){
+  document.getElementById('stat').textContent = txt;
+  document.getElementById('dot').className = 'dot ' + (cls||'');
+}
+
+/* ==================== 连接 ==================== */
+function connect(){
+  if(!cfg.key){ setStat('未设置私钥',''); return; }
+  if(cli){ try{cli.end(true);}catch(e){} cli = null; }
+
+  setStat('连接中…','ing');
+  log('正在连巴法云…');
+
+  try{
+    cli = mqtt.connect(BROKER, {
+      clientId: cfg.key,                 // ClientID = 私钥
+      keepalive: 60,
+      clean: true,
+      reconnectPeriod: 4000,
+      connectTimeout: 12000,
+      protocolVersion: 4,
+    });
+  }catch(e){
+    setStat('连接失败','err'); log('✗ ' + e.message); return;
+  }
+
+  cli.on('connect', ()=>{
+    setStat('已连接','on');
+    log('✓ 已连接巴法云');
+    cli.subscribe(TOPIC, err=>{
+      log(err ? '✗ 订阅失败 '+err.message : '✓ 已订阅 '+TOPIC);
+    });
+  });
+
+  cli.on('reconnect', ()=> setStat('重连中…','ing'));
+
+  cli.on('close', ()=>{
+    if(document.getElementById('stat').textContent !== '未设置私钥')
+      setStat('已断开','err');
+  });
+
+  cli.on('error', e=>{
+    setStat('连接出错','err');
+    log('✗ ' + (e && e.message ? e.message : e));
+  });
+
+  cli.on('message', (t, payload)=>{
+    const m = payload.toString();
+    if(m === 'ping' || m.startsWith('ok:') || m.startsWith('err:') || m.startsWith('wol:'))
+      log('📨 ' + m);
+    else if(m.startsWith('alive:'))
+      log('🟢 在线 · ' + m.slice(6));
+    else
+      log('📨 ' + m);
+  });
+}
+
+/* ==================== 发指令 ==================== */
+function send(cmd){
+  if(!cli || !cli.connected){ alert('还没连上云端，请点【重新连接】'); return false; }
+  cli.publish(TOPIC, cmd, {qos:0});
+  log('📤 ' + cmd);
+  return true;
+}
+
+/* ==================== 渲染设备 ==================== */
+function render(){
+  const box = document.getElementById('devs');
+  box.innerHTML = '';
+
+  if(!devs.length){
+    box.innerHTML = '<div class="tip">还没有设备，点下面【⚙ 设置】→ 设备列表 → 添加设备</div>';
+    return;
+  }
+
+  devs.forEach((d, i)=>{
+    const el = document.createElement('div');
+    el.className = 'dev';
+    el.innerHTML =
+      `<div class="dev-name">${esc(d.name)}</div>
+       <div class="dev-meta">${esc(d.ip||'')}${d.ip&&d.mac?'  ·  ':''}${esc(d.mac||'')}</div>
+       <div class="row">
+         <button class="btn btn-on">开 机</button>
+         <button class="btn btn-off">关 机</button>
+       </div>`;
+    const [on, off] = el.querySelectorAll('button');
+    on.onclick  = ()=>wake(d);
+    off.onclick = ()=>shutdown(d);
+    box.appendChild(el);
+  });
+}
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ==================== 动作 ==================== */
+function normMac(s){
+  return String(s||'').replace(/[^0-9a-fA-F]/g,'').toUpperCase()
+    .replace(/(..)(?=.)/g,'$1:');
+}
+
+function wake(d){
+  if(!d.mac){ alert('这台设备没填 MAC，开不了机'); return; }
+  if(send('wake:' + normMac(d.mac))) toast('已发开机指令 → ' + d.name);
+}
+
+function shutdown(d){
+  if(!confirm(`要给「${d.name}」发关机指令吗？\n\n发出后有 60 秒反悔时间。`)) return;
+  if(send('off:' + normMac(d.mac))) toast('已发关机指令（60 秒内可取消）');
+}
+
+function toast(msg){
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = `position:fixed;left:50%;bottom:90px;transform:translateX(-50%);
+    background:rgba(28,28,30,.92);color:#fff;padding:11px 18px;border-radius:22px;
+    font-size:14px;z-index:999;max-width:86vw;text-align:center;line-height:1.5;
+    animation:up .2s`;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2300);
+}
+
+/* ==================== 弹层控制 ==================== */
+const mask = document.getElementById('mask');
+function openMask(){ mask.classList.add('show'); }
+function closeMask(){ mask.classList.remove('show'); showPane('main'); }
+function showPane(which){
+  document.getElementById('paneMain').style.display   = which==='main'?'':'none';
+  document.getElementById('paneDev').style.display    = which==='dev'?'':'none';
+  document.getElementById('paneEdit').style.display   = which==='edit'?'':'none';
+  document.getElementById('paneExport').style.display = which==='export'?'':'none';
+  document.getElementById('paneImport').style.display = which==='import'?'':'none';
+  if (which === 'export') doExport();
+}
+
+/* ==================== 配置导出 / 导入 ====================
+   数据存在手机浏览器的 localStorage 里。
+   换手机或清缓存会丢，所以提供"二维码 / 配置码"备份。
+   二维码里就是本地数据本身，不经过任何服务器。
+======================================================== */
+
+const CODE_PREFIX = 'WOLCFG1:';
+
+/** 把当前配置打包成一个字符串 */
+function packCfg(){
+  const payload = {
+    v: 1,
+    k: (cfg.key || ''),
+    n: (cfg.name || ''),
+    d: devs.map(x => ({ n: x.name, m: x.mac, i: x.ip || '' })),
+    t: Date.now()
+  };
+  // 中文安全：先转 UTF-8 字节，再 base64
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  let bin = '';
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return CODE_PREFIX + btoa(bin);
+}
+
+/** 从字符串还原配置并写回本地 */
+function unpackCfg(code){
+  code = String(code || '').trim().replace(/\s+/g, '');
+  const i = code.indexOf(CODE_PREFIX);
+  if (i < 0) throw new Error('不是有效的配置码（开头应该是 ' + CODE_PREFIX + '）');
+  const b64 = code.slice(i + CODE_PREFIX.length);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
+  const obj = JSON.parse(new TextDecoder().decode(bytes));
+  if (!obj || !obj.k) throw new Error('配置码内容不完整（缺少私钥）');
+  return obj;
+}
+
+/** 导出：生成二维码 + 配置码 */
+function doExport(){
+  const code = packCfg();
+  document.getElementById('taCode').value = code;
+
+  const holder = document.getElementById('qrHolder');
+  holder.innerHTML = '';
+  try {
+    // qrcodejs: 自动按内容选版本，容错级别 M
+    new QRCode(holder, {
+      text: code,
+      width: 240, height: 240,
+      colorDark: '#000000', colorLight: '#FFFFFF',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } catch (e) {
+    holder.innerHTML = '<div style="color:#FF3B30;font-size:13px;text-align:center;line-height:1.7">' +
+      '二维码生成失败：' + esc(e.message) + '<br>可以直接用下面的【配置码】复制保存。</div>';
+  }
+}
+
+/** 导入：把解出来的配置写进本地，然后重连 */
+function applyImported(obj){
+  cfg.key  = obj.k || '';
+  cfg.name = obj.n || '我的手机';
+  localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+
+  devs = (obj.d || []).map(x => ({ name: x.n || '', mac: x.m || '', ip: x.i || '' }));
+  if (!devs.length) throw new Error('配置里没有任何设备');
+  save();
+
+  render();
+  connect();
+  return devs.length;
+}
+
+/** 方式一：上传二维码截图 → 解码 */
+async function importFromImage(file){
+  const msg = document.getElementById('impMsg');
+  msg.textContent = '正在识别图片…';
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  try {
+    await new Promise((res, rej) => {
+      img.onload = res; img.onerror = () => rej(new Error('图片读不出来'));
+      img.src = url;
+    });
+    const cv = document.createElement('canvas');
+    cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+    cv.getContext('2d').drawImage(img, 0, 0);
+    const data = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height);
+    const r = jsQR(data.data, data.width, data.height);
+    if (!r || !r.data) throw new Error('没识别到二维码，试试点原图 / 截得更清楚些');
+    const n = applyImported(unpackCfg(r.data));
+    msg.style.color = '#34C759';
+    msg.textContent = '✅ 成功恢复 ' + n + ' 台设备，正在连接…';
+    setTimeout(() => { closeMask(); }, 900);
+  } catch (e) {
+    msg.style.color = '#FF3B30';
+    msg.textContent = '✗ ' + e.message;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** 方式二：粘贴配置码 */
+function importFromText(text){
+  const msg = document.getElementById('impMsg');
+  try {
+    const n = applyImported(unpackCfg(text));
+    msg.style.color = '#34C759';
+    msg.textContent = '✅ 成功恢复 ' + n + ' 台设备，正在连接…';
+    setTimeout(() => { closeMask(); }, 900);
+  } catch (e) {
+    msg.style.color = '#FF3B30';
+    msg.textContent = '✗ ' + e.message;
+  }
+}
+
+/* ==================== 设备列表 UI ==================== */
+function renderDevList(){
+  const box = document.getElementById('devList');
+  box.innerHTML = '';
+  if(!devs.length){ box.innerHTML = '<div class="hint">还没有设备</div>'; return; }
+
+  devs.forEach((d,i)=>{
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #F0F0F3';
+    row.innerHTML =
+      `<div style="flex:1;cursor:pointer">
+         <div style="font-size:15px;font-weight:600">${esc(d.name)}</div>
+         <div style="font-size:11px;color:#8E8E93;margin-top:2px">${esc(d.mac||'未填MAC')}</div>
+       </div>
+       <button style="border:0;background:#FFF1F0;color:#FF3B30;width:38px;height:38px;
+         border-radius:10px;font-size:17px;cursor:pointer">✕</button>`;
+    row.firstElementChild.onclick = ()=>openEdit(i);
+    row.querySelector('button').onclick = ()=>{
+      if(confirm(`删除「${d.name}」？`)){ devs.splice(i,1); save(); renderDevList(); render(); }
+    };
+    box.appendChild(row);
+  });
+}
+
+function openEdit(i){
+  editIdx = (i===undefined||i===null) ? -1 : i;
+  const d = editIdx>=0 ? devs[editIdx] : {name:'',ip:'',mac:''};
+  document.getElementById('edTitle').textContent = editIdx>=0?'编辑设备':'添加设备';
+  document.getElementById('edName').value = d.name||'';
+  document.getElementById('edIp').value   = d.ip||'';
+  document.getElementById('edMac').value  = d.mac||'';
+  showPane('edit');
+}
+
+/* ==================== 事件绑定 ==================== */
+document.getElementById('btnSet').onclick = ()=>{
+  document.getElementById('inKey').value  = cfg.key||'';
+  document.getElementById('inName').value = cfg.name||'';
+  showPane('main'); openMask();
+};
+document.getElementById('btnClose').onclick = closeMask;
+mask.onclick = e=>{ if(e.target===mask) closeMask(); };
+
+document.getElementById('btnSave').onclick = ()=>{
+  cfg.key  = document.getElementById('inKey').value.trim();
+  cfg.name = document.getElementById('inName').value.trim() || '我的手机';
+  if(!cfg.key){ alert('私钥不能为空'); return; }
+  save(); closeMask();
+  document.getElementById('firstTip').style.display = 'none';
+  connect();
+};
+
+document.getElementById('btnPing').onclick = ()=>{
+  if(send('ping')) toast('已发测试指令，看下面日志');
+};
+document.getElementById('btnReconn').onclick = ()=>connect();
+document.getElementById('btnCancel').onclick = ()=>{
+  if(send('cancel')) toast('已发取消指令');
+};
+
+document.getElementById('btnDevBack').onclick  = ()=>showPane('main');
+document.getElementById('btnDevAdd').onclick   = ()=>openEdit(-1);
+document.getElementById('btnDevReset').onclick = ()=>{
+  if(confirm('把设备恢复成默认三台？')){ devs = JSON.parse(JSON.stringify(DEFAULT_DEVS)); save(); renderDevList(); render(); }
+};
+document.getElementById('edCancel').onclick = ()=>showPane('dev');
+
+/* ---------- 导出 / 导入 ---------- */
+document.getElementById('btnExport').onclick = ()=>showPane('export');
+document.getElementById('btnImport').onclick = ()=>{
+  document.getElementById('impMsg').textContent = '';
+  document.getElementById('taPaste').value = '';
+  document.getElementById('fileQr').value = '';
+  showPane('import');
+};
+document.getElementById('expDone').onclick  = ()=>showPane('main');
+document.getElementById('impCancel').onclick = ()=>showPane('main');
+
+document.getElementById('btnCopyCode').onclick = async ()=>{
+  const ta = document.getElementById('taCode');
+  const txt = ta.value;
+  try {
+    await navigator.clipboard.writeText(txt);
+    toast('配置码已复制');
+  } catch (e) {
+    // 有些手机浏览器不给剪贴板权限 → 退回"选中让用户自己复制"
+    ta.removeAttribute('readonly');
+    ta.select();
+    ta.setSelectionRange(0, txt.length);
+    try { document.execCommand('copy'); toast('配置码已复制'); }
+    catch (_) { toast('请长按上面的文字手动复制'); }
+    setTimeout(()=>ta.setAttribute('readonly',''), 800);
+  }
+};
+
+document.getElementById('fileQr').onchange = (ev)=>{
+  const f = ev.target.files && ev.target.files[0];
+  if (f) importFromImage(f);
+};
+
+document.getElementById('btnDoImport').onclick = ()=>{
+  const t = document.getElementById('taPaste').value.trim();
+  if (!t) { document.getElementById('impMsg').style.color='#FF3B30';
+            document.getElementById('impMsg').textContent='✗ 请先粘贴配置码，或上传二维码截图'; return; }
+  importFromText(t);
+};
+document.getElementById('edSave').onclick = ()=>{
+  const n = document.getElementById('edName').value.trim();
+  const ip = document.getElementById('edIp').value.trim();
+  const macRaw = document.getElementById('edMac').value.trim();
+  if(!n){ alert('请填名称'); return; }
+  const mac = macRaw ? normMac(macRaw) : '';
+  if(macRaw && mac.split(':').length !== 6){ alert('MAC 格式不对，应该是 6 组，比如 74:39:89:98:F6:F6'); return; }
+  const o = {name:n, ip:ip, mac:mac};
+  if(editIdx>=0) devs[editIdx] = o; else devs.push(o);
+  save(); renderDevList(); render(); showPane('dev');
+};
+
+/* ==================== 启动 ==================== */
+load();
+render();
+renderDevList();
+if(!cfg.key){
+  document.getElementById('firstTip').style.display = '';
+  setStat('未设置私钥','');
+}else{
+  connect();
+}
+window.addEventListener('pageshow', ()=>{ if(cfg.key && (!cli || !cli.connected)) connect(); });
+</script>
+</body>
+</html>
