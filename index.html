@@ -265,17 +265,20 @@ h3{font-size:14px; margin:24px 0 4px; color:var(--text)}
         <button class="btn btn-on" id="btnDevAdd">＋ 添加设备</button>
       </div>
       <div class="row">
-        <button class="btn ghost" id="btnDevReset">恢复默认三台</button>
+        <button class="btn ghost" id="btnDevReset">恢复我的三台</button>
       </div>
 
       <div class="sec" style="margin-top:20px">
-        <div class="sechead">出厂设置（对外销售用）</div>
-        <button id="btnDevClear"><span>🧹 清空所有设备（保留私钥）</span><span class="arrow">›</span></button>
+        <div class="sechead">出厂示例版（对外销售用）</div>
+        <button id="btnFactoryDemo"><span>📦 换成出厂示例版（虚拟数据）</span><span class="arrow">›</span></button>
+        <button id="btnDevClear"><span>🧹 清空所有设备（纯空白）</span><span class="arrow">›</span></button>
         <button id="btnFactory"><span>🏭 恢复出厂（设备 + 私钥全清）</span><span class="arrow">›</span></button>
       </div>
       <div class="hint" style="margin-top:8px">
-        要卖给别人时：先点这个清空 → 再【导出配置】→ 那个二维码就是"出厂空白版"，
-        客户扫一下就得到干净界面，然后自己加自己的设备。
+        卖给别人时：<br>
+        ① 点【换成出厂示例版】→ 三台虚拟电脑（示例·书房电脑…）<br>
+        ② 去【导出配置】→ 那张二维码就是你的"出厂配置"<br>
+        ③ 客户扫一下就得到示例界面，照着改成自己的就行 ✓
       </div>
     </div>
 
@@ -364,6 +367,15 @@ const DEFAULT_DEVS = [
   {name:'P310（本机）',    ip:'192.168.0.104', mac:'74:39:89:98:F6:F6'},
   {name:'新机2060',        ip:'192.168.0.103', mac:'00:E0:06:4D:49:B2'},
   {name:'NAS（绿联）',     ip:'192.168.0.4',   mac:'6C:1F:F7:0C:8B:80'},
+];
+
+/* 出厂示例版（给客户看的占位数据）
+   —— 都是虚拟的名字/MAC/IP，客户照着这个格式改成自己的即可。
+   真实设备用【导出配置】的二维码一键替换。 */
+const FACTORY_DEVS = [
+  {name:'示例·书房电脑',  ip:'192.168.1.100', mac:'AA:BB:CC:DD:EE:01'},
+  {name:'示例·客厅电脑',  ip:'192.168.1.101', mac:'AA:BB:CC:DD:EE:02'},
+  {name:'示例·NAS 存储',  ip:'192.168.1.102', mac:'AA:BB:CC:DD:EE:03'},
 ];
 
 let cfg = {key:'', name:'我的手机'};
@@ -848,6 +860,14 @@ document.getElementById('btnDevEntry').onclick = ()=>{
 };
 
 /* ---------- 出厂设置（对外销售用）---------- */
+document.getElementById('btnFactoryDemo').onclick = ()=>{
+  if(!confirm('换成出厂示例版？\n\n会装入三台"虚拟示例电脑"（示例·书房电脑 等），\n你的真实设备会被替换掉。\n\n建议先【导出配置】备份自己的。')) return;
+  devs = JSON.parse(JSON.stringify(FACTORY_DEVS));
+  save();
+  render(); renderDevList();
+  toast('已换成出厂示例版 → 现在去【导出配置】');
+};
+
 document.getElementById('btnDevClear').onclick = ()=>{
   if(!confirm('清空所有设备？\n\n（私钥会保留，你的连接不受影响）')) return;
   devs = [];
