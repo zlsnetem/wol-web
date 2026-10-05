@@ -265,7 +265,7 @@ h3{font-size:14px; margin:24px 0 4px; color:var(--text)}
         <button class="btn btn-on" id="btnDevAdd">＋ 添加设备</button>
       </div>
       <div class="row">
-        <button class="btn ghost" id="btnDevReset">恢复我的三台</button>
+        <button class="btn ghost" id="btnDevReset">恢复示例三台</button>
       </div>
 
       <div class="sec" style="margin-top:20px">
@@ -287,9 +287,9 @@ h3{font-size:14px; margin:24px 0 4px; color:var(--text)}
       <label>名称</label>
       <input id="edName" placeholder="比如：书房电脑">
       <label>IP <span class="opt">（可留空）</span></label>
-      <input id="edIp" placeholder="192.168.0.104" inputmode="decimal">
+      <input id="edIp" placeholder="192.168.1.100" inputmode="decimal">
       <label>MAC <span class="opt">（必填，开机要用它）</span></label>
-      <input id="edMac" placeholder="74:39:89:98:F6:F6" autocapitalize="characters">
+      <input id="edMac" placeholder="AA:BB:CC:DD:EE:01" autocapitalize="characters">
       <div class="hint">MAC 查法：那台电脑上按 Win+R → cmd → 输入 ipconfig /all → 找"物理地址"</div>
       <div class="row">
         <button class="btn ghost" id="edCancel">取消</button>
@@ -363,20 +363,17 @@ const TOPIC  = 'wolpc';
 const LS_KEY = 'wol_web_cfg';
 const LS_DEV = 'wol_web_devs';
 
+/* 默认设备 = 出厂示例数据（虚拟的）
+   ⚠️ 这里绝对不能放真实设备信息 —— 网页源码在公网上谁都能看 ✗
+   你自己的真实设备用【📤 导出配置】的二维码保存，需要时扫回来。 */
 const DEFAULT_DEVS = [
-  {name:'P310（本机）',    ip:'192.168.0.104', mac:'74:39:89:98:F6:F6'},
-  {name:'新机2060',        ip:'192.168.0.103', mac:'00:E0:06:4D:49:B2'},
-  {name:'NAS（绿联）',     ip:'192.168.0.4',   mac:'6C:1F:F7:0C:8B:80'},
-];
-
-/* 出厂示例版（给客户看的占位数据）
-   —— 都是虚拟的名字/MAC/IP，客户照着这个格式改成自己的即可。
-   真实设备用【导出配置】的二维码一键替换。 */
-const FACTORY_DEVS = [
   {name:'示例·书房电脑',  ip:'192.168.1.100', mac:'AA:BB:CC:DD:EE:01'},
   {name:'示例·客厅电脑',  ip:'192.168.1.101', mac:'AA:BB:CC:DD:EE:02'},
   {name:'示例·NAS 存储',  ip:'192.168.1.102', mac:'AA:BB:CC:DD:EE:03'},
 ];
+
+/* 出厂示例版 = 跟默认一致（保留这个名字，界面上按钮用） */
+const FACTORY_DEVS = DEFAULT_DEVS;
 
 let cfg = {key:'', name:'我的手机'};
 let devs = [];
@@ -483,7 +480,7 @@ function connect(){
 ================================================================ */
 const PING_EVERY = 20000;   // 每 20 秒问一次
 const ALIVE_TTL  = 45000;   // 45 秒没应答就算离线
-let aliveSeen = {};         // { "P310": 1530000000000 }
+let aliveSeen = {};         // { "示例电脑": 1530000000000 }
 let pingTimer = null;
 // 方便调试（也方便你在浏览器控制台看状态）
 window.aliveSeen = aliveSeen;
@@ -503,7 +500,7 @@ function isOnline(d){
   if(d.cloud) targets.push(String(d.cloud).trim());
   // ② 设备名字本身
   if(d.name)  targets.push(String(d.name).trim());
-  // ③ 去掉中文括号后缀，比如 "P310（本机）" → "P310"
+  // ③ 去掉中文括号后缀，比如 "书房电脑（台式）" → "书房电脑"
   if(d.name)  targets.push(String(d.name).replace(/[（(].*?[)）]/g,'').trim());
 
   for(const who in aliveSeen){
@@ -513,7 +510,7 @@ function isOnline(d){
       if(!t) continue;
       if(w === t) return true;                           // 完全一样
       if(w.toLowerCase() === t.toLowerCase()) return true; // 忽略大小写
-      // 互相包含（"P310" 与 "P310（本机）" 这类）
+      // 互相包含（"书房电脑" 与 "书房电脑（台式）" 这类）
       if(w.length >= 3 && t.length >= 3 && (w.includes(t) || t.includes(w))) return true;
     }
   }
@@ -521,14 +518,12 @@ function isOnline(d){
 }
 
 /* ---- 已知对应关系：设备名 → 值班员报到时用的名字 ----
-   新机的值班员用的是电脑名 USER-20260907YJ，
-   跟你给设备起的名字不一样，所以这里做个对照表。 */
+   ⚠️ 这里也不放真实电脑名（源码公开）✗
+   客户用【设备列表】里填"云端标识"来对照自己的即可。 */
 const CLOUD_ALIAS = {
-  'P310（本机）': 'P310',
-  'P310':        'P310',
-  '新机2060':     'USER-20260907YJ',
-  'NAS（绿联）':  '',                 // NAS 没装值班员，永远离线（后续让板子 ping 它）
-  'NAS':         ''
+  '示例·书房电脑': '',
+  '示例·客厅电脑': '',
+  '示例·NAS 存储': ''
 };
 
 /** 补全设备的云端标识（老配置也能自动修好） */
@@ -935,7 +930,7 @@ document.getElementById('edSave').onclick = ()=>{
   const macRaw = document.getElementById('edMac').value.trim();
   if(!n){ alert('请填名称'); return; }
   const mac = macRaw ? normMac(macRaw) : '';
-  if(macRaw && mac.split(':').length !== 6){ alert('MAC 格式不对，应该是 6 组，比如 74:39:89:98:F6:F6'); return; }
+  if(macRaw && mac.split(':').length !== 6){ alert('MAC 格式不对，应该是 6 组，比如 AA:BB:CC:DD:EE:01'); return; }
   const o = {name:n, ip:ip, mac:mac};
   if(editIdx>=0) devs[editIdx] = o; else devs.push(o);
   save(); renderDevList(); render(); showPane('dev');
