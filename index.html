@@ -464,9 +464,11 @@ function askWhoIsAlive(){
 function isOnline(d){
   const now = Date.now();
   const targets = [];
+  // ① 云端标识（最精确 —— 值班员报上来的名字）
   if(d.cloud) targets.push(String(d.cloud).trim());
+  // ② 设备名字本身
   if(d.name)  targets.push(String(d.name).trim());
-  // 去掉中文括号后缀，比如 "P310（本机）" → "P310"
+  // ③ 去掉中文括号后缀，比如 "P310（本机）" → "P310"
   if(d.name)  targets.push(String(d.name).replace(/[（(].*?[)）]/g,'').trim());
 
   for(const who in aliveSeen){
@@ -481,6 +483,33 @@ function isOnline(d){
     }
   }
   return false;
+}
+
+/* ---- 已知对应关系：设备名 → 值班员报到时用的名字 ----
+   新机的值班员用的是电脑名 USER-20260907YJ，
+   跟你给设备起的名字不一样，所以这里做个对照表。 */
+const CLOUD_ALIAS = {
+  'P310（本机）': 'P310',
+  'P310':        'P310',
+  '新机2060':     'USER-20260907YJ',
+  'NAS（绿联）':  '',                 // NAS 没装值班员，永远离线（后续让板子 ping 它）
+  'NAS':         ''
+};
+
+/** 补全设备的云端标识（老配置也能自动修好） */
+function fixCloudIds(){
+  let changed = false;
+  devs.forEach(d=>{
+    if(!d.cloud){
+      const k = String(d.name||'').trim();
+      if(CLOUD_ALIAS[k] !== undefined){
+        d.cloud = CLOUD_ALIAS[k];
+        changed = true;
+      }
+    }
+  });
+  if(changed) save();
+  return changed;
 }
 
 /** 刷新每张卡的状态点（不重建 DOM，避免闪烁） */
@@ -821,6 +850,7 @@ document.getElementById('edSave').onclick = ()=>{
 
 /* ==================== 启动 ==================== */
 load();
+fixCloudIds();          // ★ 自动补全"云端标识"（老配置也能认出新机）
 render();
 renderDevList();
 if(!cfg.key){
