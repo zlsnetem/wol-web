@@ -233,7 +233,12 @@ h3{font-size:14px; margin:24px 0 4px; color:var(--text)}
         <button class="btn btn-on" id="btnSave">保存并连接</button>
       </div>
 
-      <div class="sec" style="margin-top:20px">
+      <div class="sec" style="margin-top:22px">
+        <div class="sechead">设备管理</div>
+        <button id="btnDevEntry"><span>🖥 设备列表（增 / 删 / 改）</span><span class="arrow">›</span></button>
+      </div>
+
+      <div class="sec" style="margin-top:14px">
         <div class="sechead">备份与恢复</div>
         <button id="btnExport"><span>📤 导出配置（二维码）</span><span class="arrow">›</span></button>
         <button id="btnImport"><span>📥 导入配置（换手机用）</span><span class="arrow">›</span></button>
@@ -796,6 +801,12 @@ document.getElementById('btnDevReset').onclick = ()=>{
   if(confirm('把设备恢复成默认三台？')){ devs = JSON.parse(JSON.stringify(DEFAULT_DEVS)); save(); renderDevList(); render(); }
 };
 document.getElementById('edCancel').onclick = ()=>showPane('dev');
+
+/* ---------- 设备列表入口（这个按钮之前丢了，2026-10-04 补回）---------- */
+document.getElementById('btnDevEntry').onclick = ()=>{
+  renderDevList();
+  showPane('dev');
+};
 
 /* ---------- 导出 / 导入 ---------- */
 document.getElementById('btnExport').onclick = ()=>showPane('export');
